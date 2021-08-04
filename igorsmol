@@ -1,0 +1,193 @@
+#pragma rtGlobals=1		// Use modern global access method.
+#include <KBColorizeTraces>
+Macro Main_SmolRun_mix() // calculation procedures for original Smoluchowski aggregation equations
+	variable num_dif_eq = 200  // number of differential equations
+	variable num_time_pnts = 1001  // number of time points
+	variable npsp = 100 // the Number of the Primary Particle in a Second Primary Particle
+	//variable df = 2 // fractal dimension
+	make/o/d/n=(num_time_pnts, num_dif_eq) SmolKin; SmolKin = 0
+	setscale/p x 0, 0.5, "", SmolKin
+	make/o/d/n=(num_dif_eq, num_dif_eq) waveaij; waveaij = 1
+	//calc_kernel_original(num_dif_eq, df)
+	make/o/d/n=2 param
+	param[0] = num_dif_eq
+	param[1] = npsp
+	SmolKin[0][1]=1
+	integrateode SmolKinetic_mix param SmolKin
+
+	//make/o/d/n=(num_time_pnts) tau; tau = 0
+	//tau = 0.05*p	
+	//calc_mass(num_dif_eq, num_time_pnts)
+	//calc_ii0(num_dif_eq, num_time_pnts)
+End
+
+
+Function SmolKinetic_mix(pw, tt, yw, dydt)
+
+	wave pw
+	variable tt
+	wave yw
+	wave dydt
+	
+	wave waveaij
+	variable i, j, k
+	variable sumyw
+	variable sumij
+	
+	variable pnts; pnts = pw[0]
+	variable npsp; npsp = pw[1] //  the Number of the Primary Particle in a Second Primary Particle
+	
+	
+	dydt[0] = 0
+	sumyw = 0
+
+	i =1
+	do
+	sumyw += waveaij[1][i]*yw[i]
+	i += 1
+	while (i < npsp)
+	dydt[1] = (-2*yw[1]*sumyw)
+	
+	sumij = 0
+	k = 2
+	do
+	sumyw = 0
+	i = 1
+		do
+		sumyw += waveaij[k][i]*yw[i]
+		i += 1
+		while (i < npsp)
+		
+		sumij = 0
+		j = 1
+		do
+		sumij += waveaij[k-j][j]*yw[j]*yw[k-j]
+		j += 1
+		while (j < k)
+	dydt[k] = sumij - 2*yw[k]*sumyw
+	k += 1
+	while (k < npsp)
+	
+	
+	// 2nd primary particle
+	// birth
+	sumij = 0
+	k = 1
+	do
+		j = npsp - k
+		do
+		sumij += waveaij[k][j]*yw[k]*yw[j]
+		j += 1
+		while (j < npsp)
+	k += 1
+	while (k < npsp)
+	// death
+	sumyw = 0
+	i = npsp
+	do
+		sumyw += yw[i] // add kernel Bij!! (i.e., wavebij[][]*yw[i])
+		i += 1
+	while (i < pnts)
+	dydt[npsp] = sumij - 2*yw[npsp]*sumyw
+	
+	
+	// aggregation of 2nd primary particles
+	sumij = 0
+	k = 2
+	do
+	        sumyw = 0
+	        i = npsp
+		do
+		sumyw += yw[i] // add kernel Bij!! (i.e., wavebij[][]*yw[i])
+		i += 1
+		while (i < pnts)
+		
+		sumij = 0
+		j = 1
+		do
+		sumij += yw[j -1 + npsp]*yw[(k-j) -1 + npsp] // add kernel Bij!! (i.e., wavebij[][]*..)
+		// Look up table: X = k, j (X-mer) <=> X -1 + npsp 
+		j += 1
+		while (j < k)
+	
+	dydt[(k - 1 + npsp)] = sumij - 2*yw[(k -1 + npsp)]*sumyw
+	k += 1
+	//while ((k - 1 + npsp) < pnts)
+	while (k < (pnts -npsp + 1))
+	
+	return 0
+	
+End
+
+
+
+
+Function calc_mass(dif_pnts, time_pnts)
+
+	variable dif_pnts, time_pnts
+	wave SmolKin
+	make/o/d/n=(time_pnts) wsumsm; wsumsm = 0
+	variable sumsm
+	variable i, j
+	
+	i = 0
+	do
+		j = 1
+		sumsm = 0
+		do
+		sumsm += j*SmolKin[i][j]
+		j += 1
+		while (j < dif_pnts)
+		wsumsm[i] = sumsm
+		i += 1
+	while (i < time_pnts)
+	
+End
+
+
+
+
+Function calc_ii0(dif_pnts, time_pnts)
+
+	variable dif_pnts, time_pnts
+	wave SmolKin
+	make/o/d/n=(time_pnts) w_ii0; w_ii0 = 0
+	variable ii0
+	variable i, j
+	
+	i = 0
+	do
+		j = 1
+		ii0 = 0
+		do
+		ii0 += SmolKin[i][j]*j^2
+		j += 1
+		while (j < dif_pnts)
+		w_ii0[i] = ii0
+		i += 1
+	while (i < time_pnts)
+
+End
+
+
+
+
+Function calc_kernel_original(pnts, df) // Smoluchowski original kernel
+
+	variable pnts
+	variable df
+	variable b; b = 1/df
+	make/o/d/n=(pnts, pnts) waveaij; waveaij = 0
+	variable i, j
+
+	i = 1
+	do
+		j = 1
+		do
+		waveaij[i][j] = 0.25*((i^b)+(j^b))*((i^(-b))+(j^(-b)))
+		j += 1
+		while (j < pnts)
+		i += 1
+	while (i < pnts)
+
+End
